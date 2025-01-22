@@ -10,6 +10,7 @@
 
 
 #include "stepper.h"
+#include <WiFiUDP.h>
 #include "aerolitheUdp.h"
 
 const int stepPin = 12;       // Pin connected to the STEP pin of the stepper driver
@@ -20,7 +21,10 @@ const int nearLimitPin = 15;  // Pin for the limit switch when the camera moves 
 const int microsteps = 16;  // microsteps à 1/16
 const int acceleration = 10000;
 
-
+const long maxPosition = 61200;  // Maximum allowable position
+const int maxSpeed = 6000;       // Maximum speed variable
+volatile int previousSpeed = 0;
+bool runSpeedBool = false;
 
 
 // An instance of AccelStepper
@@ -39,6 +43,10 @@ unsigned long farLimitLastDebounceTime = 0;
 unsigned long farLimitLastDebounceTimeStuck = 0;
 unsigned long nearLimitLastDebounceTime = 0;
 
+bool allowMoveForward = true;
+bool allowMoveBackward = true;
+
+
 bool calibrationDone = false;
 volatile bool stepperMotorEmergencyStop = false;
 
@@ -49,15 +57,16 @@ long stepperCurrentPosition = 0;  // On calibration, the far limit switch needs 
 // Interrupt service routines
 // NOT A GOOD IDEA to put processor heavy fuctions in the IRAM_ATTR(), keep it at minimum
 void IRAM_ATTR onFarLimit() {
-  stepper.setCurrentPosition(0);
   farLimitInterruptTriggered = true;
+  allowMoveBackward = false;
 }
 
 void IRAM_ATTR onNearLimit() {
   nearLimitInterruptTriggered = true;
+  allowMoveForward = false;
 }
 
-void initializeLimitSwitches() {
+void initializeStepperLimitSwitches() {
   // Set up the pins
   pinMode(farLimitPin, INPUT_PULLUP);
   pinMode(nearLimitPin, INPUT_PULLUP);
@@ -65,17 +74,30 @@ void initializeLimitSwitches() {
   // Attach interrupts to the limit switch pins
   attachInterrupt(digitalPinToInterrupt(farLimitPin), onFarLimit, FALLING);
   attachInterrupt(digitalPinToInterrupt(nearLimitPin), onNearLimit, FALLING);
+
+  stepperReadSwitches();
 }
 
 void debounceLimitSwitches() {
   unsigned long currentMillis = millis();
+  static bool farLimitMessagePrinted = false;   // Flag to track if the far limit message has been printed
+  static bool nearLimitMessagePrinted = false;  // Flag to track if the near limit message has been printed
 
   if (farLimitInterruptTriggered) {
     if ((currentMillis - farLimitLastDebounceTime) > debounceDelay) {
       farLimitTriggered = true;
       farLimitInterruptTriggered = false;
       farLimitLastDebounceTime = currentMillis;
+
+      if (!farLimitMessagePrinted) {
+        Serial.println("Stepper -> Far Limit Switch Pressed");
+        farLimitMessagePrinted = true;  // Set the flag to true after printing the message
+        stepper.setCurrentPosition(0);
+        Serial.println("Stepper -> Allowed to move backward? " + String(allowMoveBackward ? "true" : "false"));
+      }
     }
+  } else {
+    farLimitMessagePrinted = false;  // Reset the flag when the interrupt is not triggered
   }
 
   if (nearLimitInterruptTriggered) {
@@ -83,28 +105,46 @@ void debounceLimitSwitches() {
       nearLimitTriggered = true;
       nearLimitInterruptTriggered = false;
       nearLimitLastDebounceTime = currentMillis;
+
+      if (!nearLimitMessagePrinted) {
+        Serial.println("Stepper -> Near Limit Switch Pressed");
+        nearLimitMessagePrinted = true;  // Set the flag to true after printing the message
+         Serial.println("Stepper -> Allowed to move backward? " + String(allowMoveForward ? "true" : "false"));
+      }
     }
+  } else {
+    nearLimitMessagePrinted = false;  // Reset the flag when the interrupt is not triggered
   }
 }
+
 
 void performStepperMotorFarLimitCalibration() {
   farLimitTriggered = digitalRead(farLimitPin) == LOW;
   nearLimitTriggered = digitalRead(nearLimitPin) == LOW;
+
   if (farLimitTriggered) {
+    Serial.print("Stepper -> Far Limit Switch Pressed");
     stepper.setCurrentPosition(0);
-    stepper.setMaxSpeed(4000);
+    stepperCurrentPosition = 0;
+    stepper.setMaxSpeed(maxSpeed);
     stepper.setAcceleration(acceleration);
     stepper.moveTo(1000);  // Move 2000 away from the limit switch in the positive direction
     while (stepper.distanceToGo() != 0) {
       stepper.run();
     }
+    stepperCurrentPosition = stepper.currentPosition();
     delay(200);
     stepper.setCurrentPosition(0);
     farLimitTriggered = false;  // Reset the flag after moving away
     stepper.moveTo(30000);
+    while (stepper.distanceToGo() != 0) {
+      stepper.run();
+    }
+    stepperCurrentPosition = stepper.currentPosition();
   } else if (nearLimitTriggered) {
+    Serial.print("Stepper -> Near Limit Switch Pressed");
     stepper.setCurrentPosition(95000);  //
-    stepper.setMaxSpeed(4000);
+    stepper.setMaxSpeed(maxSpeed);
     stepper.moveTo(-20);  // Move 2000 away from the limit switch in the positive direction
     while (stepper.distanceToGo() != 0) {
       stepper.run();
@@ -112,64 +152,116 @@ void performStepperMotorFarLimitCalibration() {
     performStepperMotorFarLimitCalibration();
   } else {
     stepper.setCurrentPosition(95000);
-    performStepperMotorMoveTo(4000, 0);
+    performStepperMotorMoveTo(maxSpeed, 0);
     stepper.moveTo(1000);
     stepper.setCurrentPosition(0);
     stepper.moveTo(30000);
   }
 }
 
-// Position is 0 to 61287 ??
+// Position is 0 to 61200 ??
+
+// void performStepperMotorMoveTo(int speed, long position) {
+
+//   debounceLimitSwitches();  // Ensure we debounce the switches before starting calibration
+//   farLimitTriggered = digitalRead(farLimitPin) == LOW;
+//   nearLimitTriggered = digitalRead(nearLimitPin) == LOW;
+
+
+//   if ((position > stepper.currentPosition() && allowMoveForward) || (position < stepper.currentPosition() && allowMoveBackward)) {
+//     if (position <= maxPosition) {
+//       stepper.setMaxSpeed(speed);
+//       stepper.setAcceleration(acceleration);
+//       stepper.moveTo(position);
+//     }
+//   }
+
+//   // If the far limit switch is triggered, move slightly away from it in the positive direction
+//   if (farLimitTriggered) {
+//     stepper.setMaxSpeed(maxSpeed);
+//     stepper.setAcceleration(acceleration);
+//     stepper.moveTo(200 * microsteps);  // Move 200 steps away from the limit switch in the positive direction
+//     while (stepper.distanceToGo() != 0) {
+//       stepper.run();
+//     }
+//     delay(200);
+//     farLimitTriggered = false;  // Reset the flag after moving away
+//     Serial.println("Far Limit Reached. Moving away");
+//   }
+
+//   // If the near limit switch is triggered, move slightly away from it in the negative direction
+//   if (nearLimitTriggered) {
+//     stepper.setMaxSpeed(maxSpeed);
+//     stepper.setAcceleration(acceleration);
+//     stepper.moveTo(-20 * microsteps);  // Move 200 steps away from the limit switch in the negative direction
+//     while (stepper.distanceToGo() != 0) {
+//       stepper.run();
+//     }
+//     delay(200);
+//     nearLimitTriggered = false;  // Reset the flag after moving away
+//   } else {
+//     // Proceed with the main movement
+//     stepper.setMaxSpeed(speed);
+//     stepper.setAcceleration(acceleration);
+//     stepper.moveTo(position);
+//     while (stepper.distanceToGo() != 0) {
+//       stepper.run();
+//     }
+//     delay(200);
+//   }
+// }
 
 void performStepperMotorMoveTo(int speed, long position) {
-  Serial.print("speed: " + (String)speed + "  , position: " + (String)position + "\n");
-  debounceLimitSwitches();  // Ensure we debounce the switches before starting calibration
-  farLimitTriggered = digitalRead(farLimitPin) == LOW;
-  nearLimitTriggered = digitalRead(nearLimitPin) == LOW;
+  debounceLimitSwitches();  // Ensure we debounce the switches before starting the movement
 
-  // If the far limit switch is triggered, move slightly away from it in the positive direction
-  if (farLimitTriggered) {
-    stepper.setMaxSpeed(4000);
-    stepper.setAcceleration(acceleration);
-    stepper.moveTo(200 * microsteps);  // Move 200 steps away from the limit switch in the positive direction
-    while (stepper.distanceToGo() != 0) {
-      stepper.run();
+  if ((position > stepper.currentPosition() && allowMoveForward) || (position < stepper.currentPosition() && allowMoveBackward)) {
+    if (position <= maxPosition) {
+      stepper.setMaxSpeed(speed);
+      stepper.setAcceleration(acceleration);
+      stepper.moveTo(position);
+    } else {
+      Serial.println("Stepper -> Requested position exceeds maximum allowable position.");
     }
-    delay(200);
-    farLimitTriggered = false;  // Reset the flag after moving away
+  } else {
+    Serial.println("Stepper -> Movement not allowed in the requested direction.");
   }
 
-  // If the near limit switch is triggered, move slightly away from it in the negative direction
-  if (nearLimitTriggered) {
-    stepper.setMaxSpeed(4000);
-    stepper.setAcceleration(acceleration);
-    stepper.moveTo(-20 * microsteps);  // Move 200 steps away from the limit switch in the negative direction
-    while (stepper.distanceToGo() != 0) {
-      stepper.run();
-    }
-    delay(200);
-    nearLimitTriggered = false;  // Reset the flag after moving away
-  } else {
-    // Proceed with the main movement
-    stepper.setMaxSpeed(speed);
-    stepper.setAcceleration(acceleration);
-    stepper.moveTo(position);
-    while (stepper.distanceToGo() != 0) {
-      stepper.run();
-    }
-    delay(200);
+  // Call run() method to make the stepper move asynchronously
+  long delta = abs(position - stepper.currentPosition());
+  static long stepsToRun = 0;
+
+  if (stepsToRun == 0) {
+    stepsToRun = delta;
+  }
+
+  if (stepsToRun > 0 && !stepperMotorEmergencyStop) {
+    stepper.run();
+    stepperCurrentPosition = stepper.currentPosition();  // Update the current position
+    stepsToRun--;
   }
 }
 
+void performStepperMotorRunSpeed(int speed) {
+  runSpeedBool = true;
+  Serial.print("Stepper -> Run Speed Start");
+  stepper.setMaxSpeed(maxSpeed);
+  stepper.setAcceleration(acceleration);
+  stepper.setSpeed(speed);
+}
 
 
 void stepperReadSwitches() {
   farLimitTriggered = digitalRead(farLimitPin) == LOW;
   nearLimitTriggered = digitalRead(nearLimitPin) == LOW;
-  Serial.println("farLimit switch pressed? " + (String)farLimitTriggered);
-  Serial.println("nearLimit switch pressed? " + (String)nearLimitTriggered);
+
+  Serial.println("Stepper -> farLimit switch pressed? " + (String)farLimitTriggered);
+  Serial.println("Stepper -> nearLimit switch pressed? " + (String)nearLimitTriggered);
 }
 
 void setStepperZeroRef() {
   stepper.setCurrentPosition(0);
+}
+
+void setStepperMaxPosRef() {
+  stepper.setCurrentPosition(61200);
 }

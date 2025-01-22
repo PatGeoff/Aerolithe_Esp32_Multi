@@ -1,6 +1,7 @@
 // aerolitheUdp.cpp
-
 #include "aerolitheUdp.h"
+#include <WiFiUDP.h>
+
 #include "actuator.h"
 #include "stepper.h"
 #include "lift.h"
@@ -34,7 +35,7 @@ void udpGetIncoming() {
     //senderIP = windows_IP;
     //senderIP = udp.remoteIP();
     //senderPort = udp.remotePort();
-    Serial.print("Received UDP packet: ");
+    Serial.print("UDP -> Received UDP packet: ");
     Serial.print(packetBuffer);
     String stri = "   --> The senderIP is " + senderIP.toString() + " and the senderPort is " + String(senderPort);
     Serial.println(stri);
@@ -60,18 +61,18 @@ void udpGetIncoming() {
       } else if (command.equals("lift")) {
         liftCommand(packetBuffer);
       } else {
-        Serial.println("Error: Unknown command.");
+        Serial.println("UDP -> Error: Unknown command.");
       }
 
     } else {
-      Serial.println("Error: Failed to parse command.");
+      Serial.println("UDP -> Error: Failed to parse command.");
     }
   }
 }
 
 
 void actuatorCommand(const char* packetBuffer) {
-  Serial.print("Parsing packetBuffer: ");
+  Serial.print("UDP -> Parsing packetBuffer: ");
   Serial.println(packetBuffer);
   // int command;
   // int parsed = sscanf(packetBuffer, "actuator,%d", &command);
@@ -97,11 +98,11 @@ void actuatorCommand(const char* packetBuffer) {
 
 void liftCommand(const char* packetBuffer) {
   // Debug prints to help diagnose the problem
-  Serial.print("Parsing packetBuffer: ");
+  Serial.print("UDP -> Parsing packetBuffer: ");
   Serial.println(packetBuffer);
 
   if (strcmp(packetBuffer, "lift setZero") == 0) {
-    Serial.println("lift Go to zero");
+    Serial.println("UDP -> lift Go to zero");
     liftServoSetZero();
     return;
   }
@@ -111,7 +112,7 @@ void liftCommand(const char* packetBuffer) {
     if (parsed == 1) {
       liftPerformSetPosition(position);
     } else {
-      Serial.println("Failed to parse position");
+      Serial.println("UDP -> Failed to parse position");
     }
     return;
   }
@@ -126,7 +127,7 @@ void liftCommand(const char* packetBuffer) {
 void stepMotorCommand(const char* packetBuffer) {
 
   // Debug prints to help diagnose the problem
-  Serial.print("Parsing packetBuffer: ");
+  Serial.print("UDP -> Parsing packetBuffer: ");
   Serial.println(packetBuffer);
   /*
   // NearCalibration will bring the camera to trigger the nearLimitSwitch and reset the stepper motor's position to zero
@@ -138,7 +139,6 @@ void stepMotorCommand(const char* packetBuffer) {
   }*/
   if (strcmp(packetBuffer, "stepmotor calibration") == 0) {
     // Call the calibration method
-    stepperReadSwitches();
     performStepperMotorFarLimitCalibration();
     return;
   }
@@ -149,7 +149,7 @@ void stepMotorCommand(const char* packetBuffer) {
   }
 
   if (strcmp(packetBuffer, "stepmotor setZero") == 0) {
-    String message = "stepperCurrentPosition was set to 0";
+    String message = "UDP -> stepperCurrentPosition was set to 0";
     Serial.println(message);
     setStepperZeroRef();
     return;
@@ -159,24 +159,44 @@ void stepMotorCommand(const char* packetBuffer) {
     sendResponse(message.c_str());
     return;
   }
+  if (strcmp(packetBuffer, "stepmotor setMaxPos") == 0) {
+    setStepperMaxPosRef();
+    String message = "Stepper -> set position to max. Current pos: " + String(stepper.currentPosition());
+    sendResponse(message.c_str());
+    return;
+  }
 
-    int speed;
+  int speed;
   long position;
-  int parsed = sscanf(packetBuffer, "stepmotor moveto %d,%i,0", &speed, &position);
-  Serial.println("Message Received:  speed = " + (String)speed + " and position = " + (String)position + " and parsed items = " + (String)parsed + "\n");
-  Serial.println("actual position: " + (String)stepper.currentPosition());
-  try {
-    //performStepperMotorMoveTo(speed, position / microsteps);
-    performStepperMotorMoveTo(speed, position);
-  } catch (...) {
-    Serial.println("Error: Invalid stepmotor command format.");
+  if (strcmp(packetBuffer, "stepmotor moveto") == 0) {
+    int parsed = sscanf(packetBuffer, "stepmotor moveto %d,%i,0", &speed, &position);
+    Serial.println("UDP -> Message Received:  speed = " + (String)speed + " and position = " + (String)position + " and parsed items = " + (String)parsed + "\n");
+    Serial.println("UDP -> actual position: " + (String)stepper.currentPosition());
+    try {
+      //performStepperMotorMoveTo(speed, position / microsteps);
+      performStepperMotorMoveTo(speed, position);
+    } catch (...) {
+      Serial.println("UDP -> Error: Invalid stepmotor command format.");
+    }
+  }
+
+  if (strncmp(packetBuffer, "stepmotor movespeed", 19) == 0) {
+    int speed;
+    int parsed = sscanf(packetBuffer, "stepmotor movespeed %i", &speed);
+    if (parsed == 1) {  // Check if parsing was successful
+      Serial.print("UDP -> New Speed = ");
+      Serial.println(speed);
+      performStepperMotorRunSpeed(speed);
+    } else {
+      Serial.println("UDP -> Error: Invalid stepmotor command format.");
+    }
   }
 }
 
 
 
 void sendResponse(const char* message) {
-  Serial.print("Sending response: ");
+  Serial.print("UDP -> Sending response: ");
   Serial.print(message);
   Serial.print(" on port ");
   Serial.println(senderPort);
@@ -186,9 +206,9 @@ void sendResponse(const char* message) {
 
   int result = udp.endPacket();
   if (result == 1) {
-    Serial.println("Packet sent successfully");
+    Serial.println("UDP -> Packet sent successfully");
   } else {
-    Serial.print("Error sending packet, result: ");
+    Serial.print("UDP -> Error sending packet, result: ");
     Serial.println(result);
   }
 }

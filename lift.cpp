@@ -39,13 +39,13 @@ void liftServoSetup() {
 }
 
 void liftServoSetZero() {
-  Serial.println("Performing a Lift Servo Calibration");
+  Serial.println("Lift -> Performing a Lift Servo Calibration");
   limitSwitchLiftTriggered = false;
   ttservo.attach(pwmPin, minPWM, maxPWM);
 
   // Check if the limit switch is already triggered
   if (digitalRead(limitSwitchPin) == LOW) {
-    Serial.println("Limit switch already triggered at power-up");
+    Serial.println("Lift -> Limit switch already triggered at power-up");
     currentServoPosition = minPWM;  // Set the current position to zero
     return;
   }
@@ -67,7 +67,7 @@ void liftServoSetZero() {
 
 void liftPerformSetPosition(const int microseconds) {
   if (microseconds >= minPWM && microseconds <= maxPosition) {
-    Serial.print("Perform lift position: ");
+    Serial.print("Lift -> Perform lift position: ");
     Serial.println(microseconds);
     ttservo.attach(pwmPin, minPWM, maxPWM);
     ttservo.writeMicroseconds(microseconds);
@@ -75,12 +75,12 @@ void liftPerformSetPosition(const int microseconds) {
     ttservo.detach();  // Detach the servo to reset its state
     currentServoPosition = microseconds;  // Update the tracked position
   } else {
-    Serial.println("Position out of range");
+    Serial.println("Lift -> Position out of range");
   }
 }
 
 void getLiftPosition() {
-  String message = "Servo Position (microseconds): " + String(currentServoPosition);
+  String message = "Lift -> Servo Position (microseconds): " + String(currentServoPosition);
   sendResponse(message.c_str());
 }
 
@@ -91,7 +91,7 @@ void liftDebounceLimitSwitch() {
       limitSwitchLiftTriggered = true;
       limitSwitchLiftInterruptTriggered = false;
       limitSwitchLastDebounceTime = currentMillis;
-      Serial.print("LiftSwitch is down\n");
+      Serial.print("Lift -> LiftSwitch is down\n");
     }
   }
 }

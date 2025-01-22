@@ -26,7 +26,7 @@ void setup() {
   connectToWiFi(ssid, password, local_IP, gateway, subnet);
   startAerolitheUDP();  // Starts UDP protocol
   initializeActuator();
-  initializeLimitSwitches();  //
+  initializeStepperLimitSwitches();  //
   actuatorDown(2000);         // Sends the actuator down
   actuatorSetZeroPosition();          // Sets the actuator's zero position
   //liftServoSetup();
@@ -44,9 +44,14 @@ void setup() {
 void loop() {
   checkAndReconnectWiFi(ssid, password, local_IP, gateway, subnet);
   udpGetIncoming();         // Check incomping UDP messages
-  stepper.run();            // Allow the stepper motor to run
+  if (!runSpeedBool){
+     stepper.run();            // Allow the stepper motor to run at a fixed speed to a position
+  }
+  else{                         
+    stepper.runSpeed();          // Allow the stepper motor to run loose at a defined speed
+  }
+ 
   debounceLimitSwitches();  // Debounces the stepper motor limit switches to get clean readings
   readHalls();              // Reads the linear actuator Halls  
-  liftDebounceLimitSwitch(); // Debounces the lift motor limit switche to get clean reading
   
 }

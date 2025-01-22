@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "250112-133752-esp32dev",
+			"path": "../../PlatformIO/Projects/250112-133752-esp32dev"
+		}
+	],
+	"settings": {}
+}

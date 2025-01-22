@@ -14,10 +14,12 @@ extern bool iLoop;
 extern bool calibrationDone;
 extern const int microsteps;
 extern volatile bool stepperMotorEmergencyStop;
+extern bool runSpeedBool;
 
 // Function declarations
-void initializeLimitSwitches();
+void initializeStepperLimitSwitches();
 void performStepperMotorMoveTo(int speed, long position);
+void performStepperMotorRunSpeed(int speed);
 void stepperReadSwitches();
 //void stepperRunToPosition();
 // void stepperGoToCloseSwitch();
@@ -26,7 +28,8 @@ void stepperReadSwitches();
 void performStepperMotorFarLimitCalibration();
 void performStepperMotorFullCalibration();
 void debounceLimitSwitches();
-void stepperReadSwitches();
+void stepperReadSwitches() ;
 void setStepperZeroRef();
+void setStepperMaxPosRef();
 
 #endif  // STEPPER_H
