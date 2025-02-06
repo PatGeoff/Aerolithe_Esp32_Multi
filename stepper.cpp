@@ -80,8 +80,8 @@ void initializeStepperLimitSwitches() {
 
 void debounceLimitSwitches() {
   unsigned long currentMillis = millis();
-  static bool farLimitMessagePrinted = false;   // Flag to track if the far limit message has been printed
-  static bool nearLimitMessagePrinted = false;  // Flag to track if the near limit message has been printed
+  static bool farLimitMessagePrinted = false;
+  static bool nearLimitMessagePrinted = false;
 
   if (farLimitInterruptTriggered) {
     if ((currentMillis - farLimitLastDebounceTime) > debounceDelay) {
@@ -90,30 +90,28 @@ void debounceLimitSwitches() {
       farLimitLastDebounceTime = currentMillis;
 
       if (!farLimitMessagePrinted) {
-        Serial.println("Stepper -> Far Limit Switch Pressed");
-        farLimitMessagePrinted = true;  // Set the flag to true after printing the message
+        Serial.println("Debounce -> Far Limit Switch Pressed");
+        farLimitMessagePrinted = true;
         stepper.setCurrentPosition(0);
-        Serial.println("Stepper -> Allowed to move backward? " + String(allowMoveBackward ? "true" : "false"));
       }
     }
   } else {
-    farLimitMessagePrinted = false;  // Reset the flag when the interrupt is not triggered
+    farLimitMessagePrinted = false;
   }
 
-  if (nearLimitInterruptTriggered) {
+ if (nearLimitInterruptTriggered) {
     if ((currentMillis - nearLimitLastDebounceTime) > debounceDelay) {
       nearLimitTriggered = true;
       nearLimitInterruptTriggered = false;
       nearLimitLastDebounceTime = currentMillis;
 
       if (!nearLimitMessagePrinted) {
-        Serial.println("Stepper -> Near Limit Switch Pressed");
-        nearLimitMessagePrinted = true;  // Set the flag to true after printing the message
-         Serial.println("Stepper -> Allowed to move backward? " + String(allowMoveForward ? "true" : "false"));
+        Serial.println("Debounce -> Near Limit Switch Pressed");
+        nearLimitMessagePrinted = true;
       }
     }
   } else {
-    nearLimitMessagePrinted = false;  // Reset the flag when the interrupt is not triggered
+    nearLimitMessagePrinted = false;
   }
 }
 

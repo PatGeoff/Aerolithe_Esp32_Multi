@@ -15,6 +15,8 @@ extern bool calibrationDone;
 extern const int microsteps;
 extern volatile bool stepperMotorEmergencyStop;
 extern bool runSpeedBool;
+extern volatile bool farLimitInterruptTriggered;
+extern volatile bool nearLimitInterruptTriggered;
 
 // Function declarations
 void initializeStepperLimitSwitches();

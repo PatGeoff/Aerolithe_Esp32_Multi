@@ -83,15 +83,18 @@ void actuatorCommand(const char* packetBuffer) {
     return;
   }
   if (strcmp(packetBuffer, "actuator 5") == 0) {
+    Serial.println("actuateur à 5 degres");
     actuatorGoTo5degres();
     return;
   }
   if (strcmp(packetBuffer, "actuator 25") == 0) {
     actuatorGoTo25degres();
+    Serial.println("actuateur à 5 degres");
     return;
   }
   if (strcmp(packetBuffer, "actuator 45") == 0) {
     actuatorGoTo45degres();
+    Serial.println("actuateur à 5 degres");
     return;
   }
 }
