@@ -13,6 +13,7 @@
 #define HALL2_PIN 33       // GPIO pin connecté à Hall2
 
 
+
 // Function prototypes
 void initializeActuator();                  // Initialisation des pins
 void actuatorUp(unsigned long duration);    // faire monter la caméra

@@ -17,6 +17,7 @@ extern volatile bool stepperMotorEmergencyStop;
 extern bool runSpeedBool;
 extern volatile bool farLimitInterruptTriggered;
 extern volatile bool nearLimitInterruptTriggered;
+extern int enablePin;
 
 // Function declarations
 void initializeStepperLimitSwitches();

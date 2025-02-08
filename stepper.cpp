@@ -17,6 +17,7 @@ const int stepPin = 12;       // Pin connected to the STEP pin of the stepper dr
 const int dirPin = 13;        // Pin connected to the DIR pin of the stepper driver
 const int farLimitPin = 4;    // Pin for the limit switch when the camera moves away
 const int nearLimitPin = 15;  // Pin for the limit switch when the camera moves closer
+int enablePin = 27;
 
 const int microsteps = 16;  // microsteps à 1/16
 const int acceleration = 10000;
@@ -70,11 +71,11 @@ void initializeStepperLimitSwitches() {
   // Set up the pins
   pinMode(farLimitPin, INPUT_PULLUP);
   pinMode(nearLimitPin, INPUT_PULLUP);
-
+  pinMode(enablePin, OUTPUT);
   // Attach interrupts to the limit switch pins
   attachInterrupt(digitalPinToInterrupt(farLimitPin), onFarLimit, FALLING);
   attachInterrupt(digitalPinToInterrupt(nearLimitPin), onNearLimit, FALLING);
-
+  digitalWrite(enablePin, HIGH);  // Disable the stepper driver after the move
   stepperReadSwitches();
 }
 
@@ -211,7 +212,7 @@ void performStepperMotorFarLimitCalibration() {
 
 void performStepperMotorMoveTo(int speed, long position) {
   debounceLimitSwitches();  // Ensure we debounce the switches before starting the movement
-
+  digitalWrite(enablePin, LOW);  // Enable the stepper driver
   if ((position > stepper.currentPosition() && allowMoveForward) || (position < stepper.currentPosition() && allowMoveBackward)) {
     if (position <= maxPosition) {
       stepper.setMaxSpeed(speed);
@@ -237,14 +238,17 @@ void performStepperMotorMoveTo(int speed, long position) {
     stepperCurrentPosition = stepper.currentPosition();  // Update the current position
     stepsToRun--;
   }
+  digitalWrite(enablePin, HIGH);  // Disable the stepper driver after the move
 }
 
 void performStepperMotorRunSpeed(int speed) {
+  digitalWrite(enablePin, LOW);  // Enable the stepper driver
   runSpeedBool = true;
   Serial.print("Stepper -> Run Speed Start");
   stepper.setMaxSpeed(maxSpeed);
   stepper.setAcceleration(acceleration);
   stepper.setSpeed(speed);
+  if (speed == 0) digitalWrite(enablePin, HIGH);  // Disable the stepper driver after the move  
 }
 
 
